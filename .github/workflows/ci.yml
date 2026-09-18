@@ -72,6 +72,7 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: test
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
@@ -126,3 +127,4 @@ jobs:
             dist/xboard-node-linux-arm64
             dist/xbctl-linux-amd64
             dist/xbctl-linux-arm64
+            install.sh

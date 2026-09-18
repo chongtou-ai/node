@@ -29,6 +29,11 @@ DEFAULT_LOG_LEVEL="info"
 DEFAULT_KERNEL_LOG_LEVEL="warn"
 DEFAULT_DOWNLOAD_BASE="https://github.com/chongtou-ai/node/releases"
 FALLBACK_DOWNLOAD_BASE="https://github.com/cedar2025/xboard-node/releases"
+GITHUB_MIRRORS=(
+    ""
+    "https://ghfast.top/"
+    "https://ghproxy.net/"
+)
 
 ACTION="${DEFAULT_ACTION}"
 MODE=""
@@ -496,6 +501,38 @@ resolve_download_url() {
     DOWNLOAD_URL="$(release_asset_url "$DEFAULT_DOWNLOAD_BASE" "$artifact")"
 }
 
+is_elf_binary() {
+    local path="$1"
+    [ -s "$path" ] || return 1
+    [ "$(head -c 4 "$path" 2>/dev/null || true)" = $'\x7fELF' ]
+}
+
+download_http() {
+    local url="$1"
+    local dest="$2"
+    local prefixed
+    local mirror
+    for mirror in "${GITHUB_MIRRORS[@]}"; do
+        if [ -n "$mirror" ]; then
+            prefixed="${mirror}${url}"
+        else
+            prefixed="$url"
+        fi
+        log_step "Downloading ${url##*/}: ${prefixed}"
+        if curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 180 "$prefixed" -o "$dest"; then
+            if is_elf_binary "$dest"; then
+                DOWNLOAD_URL="$prefixed"
+                return 0
+            fi
+            log_warn "Downloaded file is not a Linux binary: ${prefixed}"
+        else
+            log_warn "Download failed: ${prefixed}"
+        fi
+        rm -f "$dest"
+    done
+    return 1
+}
+
 download_release_artifact() {
     local artifact="$1"
     local dest="$2"
@@ -506,12 +543,9 @@ download_release_artifact() {
     local base url
     for base in "${bases[@]}"; do
         url="$(release_asset_url "$base" "$artifact")"
-        log_step "Downloading ${artifact}: ${url}"
-        if curl -fsSL "$url" -o "$dest"; then
-            DOWNLOAD_URL="$url"
+        if download_http "$url" "$dest"; then
             return 0
         fi
-        log_warn "Download failed: ${url}"
     done
     return 1
 }

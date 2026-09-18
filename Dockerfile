@@ -6,6 +6,7 @@ RUN apk add --no-cache git
 WORKDIR /build
 
 COPY go.mod go.sum ./
+COPY third_party/xray-core ./third_party/xray-core
 RUN go mod download
 
 COPY . .

@@ -16,17 +16,26 @@ This repository is the official `Xboard-Node-src-20260918` source snapshot, publ
 
 ## One-click install (Linux systemd)
 
-The installer is the same as the official `Xboard-Node-src-20260918` `install.sh`: it installs `xboard-node` + `xbctl`, writes `/etc/xboard-node`, and enables `xboard-node.service`.
+Use the Release copy of `install.sh` (this works without merging to `main`). The installer is the same as official `Xboard-Node-src-20260918`: it installs `xboard-node` + `xbctl`, writes `/etc/xboard-node`, and enables `xboard-node.service`.
 
 ```bash
 # Node mode
-curl -fsSL https://raw.githubusercontent.com/chongtou-ai/node/main/install.sh | \
+curl -fsSL https://github.com/chongtou-ai/node/releases/latest/download/install.sh | \
   sudo bash -s -- --mode node --panel https://panel.example.com --token TOKEN --node-id 1
 
 # Machine mode
-curl -fsSL https://raw.githubusercontent.com/chongtou-ai/node/main/install.sh | \
+curl -fsSL https://github.com/chongtou-ai/node/releases/latest/download/install.sh | \
   sudo bash -s -- --mode machine --panel https://panel.example.com --token TOKEN --machine-id 1
 ```
+
+If GitHub is slow, use a mirror:
+
+```bash
+curl -fsSL https://ghfast.top/https://github.com/chongtou-ai/node/releases/latest/download/install.sh | \
+  sudo bash -s -- --mode node --panel https://panel.example.com --token TOKEN --node-id 1
+```
+
+The installer first tries this repository's Release binaries, then falls back to official [cedar2025/xboard-node](https://github.com/cedar2025/xboard-node) binaries, including GitHub download mirrors.
 
 Common follow-up actions:
 
@@ -35,8 +44,6 @@ sudo bash install.sh upgrade
 sudo bash install.sh status
 sudo bash install.sh uninstall --purge --yes
 ```
-
-If this repository does not yet have a matching GitHub Release, the installer falls back to the official [cedar2025/xboard-node](https://github.com/cedar2025/xboard-node) release binaries.
 
 ### Local source / binary
 
