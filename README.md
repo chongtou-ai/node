@@ -16,7 +16,7 @@ This repository is the official `Xboard-Node-src-20260918` source snapshot, publ
 
 ## One-click install (Linux systemd)
 
-Use the Release copy of `install.sh` (this works without merging to `main`). The installer is the same as official `Xboard-Node-src-20260918`: it installs `xboard-node` + `xbctl`, writes `/etc/xboard-node`, and enables `xboard-node.service`. Default kernel is `xray` (`--kernel singbox` to switch).
+Use the Release copy of `install.sh` (this works without merging to `main`). The installer is the same as official `Xboard-Node-src-20260918`: it installs `xboard-node` + `xbctl`, writes `/etc/xboard-node`, and enables `xboard-node.service`. Default kernel is `xray` (`--kernel singbox` to switch). Install and upgrade also enable **BBR + fq** via `/etc/sysctl.d/99-xboard-node.conf` (`--no-bbr` to skip). It does not overwrite `/etc/sysctl.conf`.
 
 ```bash
 # Node mode (default kernel: xray)

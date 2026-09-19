@@ -19,6 +19,7 @@ SERVICE_NAME="xboard-node.service"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
 CLI_PATH="/usr/local/bin/xbctl"
 INSTALLER_COPY_PATH="${INSTALL_ROOT}/install.sh"
+SYSCTL_FILE="/etc/sysctl.d/99-xboard-node.conf"
 CLI_BINARY_SOURCE=""
 DEFAULT_HEALTH_PORT=65530
 DEFAULT_KERNEL="xray"
@@ -53,6 +54,7 @@ CLI_BINARY_SOURCE=""
 FORCE_RECONFIGURE=0
 PURGE=0
 YES=0
+ENABLE_BBR=1
 ARCH=""
 OS=""
 DOWNLOAD_URL=""
@@ -200,6 +202,7 @@ usage() {
     --gogc              Runtime GOGC value, e.g. 50
     --force-reconfigure Overwrite an existing install even if mode/target changed
     --purge             With uninstall, delete /etc/xboard-node too
+    --no-bbr            Skip enabling BBR + fq (enabled by default)
     --yes, -y           Non-interactive confirmation for destructive operations
 
   EXAMPLES:
@@ -277,6 +280,10 @@ parse_args() {
                 ;;
             --purge)
                 PURGE=1
+                shift
+                ;;
+            --no-bbr)
+                ENABLE_BBR=0
                 shift
                 ;;
             --yes|-y)
@@ -403,6 +410,32 @@ install_dependencies() {
 ensure_dirs() {
     mkdir -p "$INSTALL_ROOT" "$BACKUP_DIR"
     chmod 700 "$INSTALL_ROOT"
+}
+
+enable_bbr() {
+    if [ "$ENABLE_BBR" -ne 1 ]; then
+        log_info "Skipping BBR (--no-bbr)"
+        return 0
+    fi
+    log_step "Enabling BBR congestion control"
+    if ! modprobe tcp_bbr >/dev/null 2>&1 && ! grep -qw bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+        log_warn "Kernel does not advertise BBR; left current congestion control unchanged"
+        return 0
+    fi
+    cat >"$SYSCTL_FILE" <<'EOF'
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+    if ! sysctl --system >/dev/null 2>&1; then
+        sysctl -p "$SYSCTL_FILE" >/dev/null 2>&1 || true
+    fi
+    local current
+    current=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)
+    if [ "$current" = "bbr" ]; then
+        log_info "BBR enabled (${SYSCTL_FILE})"
+    else
+        log_warn "Wrote ${SYSCTL_FILE} but current congestion control is ${current:-unknown}"
+    fi
 }
 
 validate_positive_int() {
@@ -771,6 +804,7 @@ perform_install() {
     render_service
     backup_existing_state
     install_staged_files
+    enable_bbr
     start_service
 
     log_info "Installation succeeded"
@@ -801,6 +835,7 @@ perform_upgrade() {
     ln -sf "$CLI_PATH" /usr/bin/xbctl 2>/dev/null || true
     install -m 644 "$TMP_DIR/${SERVICE_NAME}" "$SERVICE_PATH"
     systemctl daemon-reload
+    enable_bbr
     systemctl restart "$SERVICE_NAME"
     if ! wait_for_health; then
         log_error "Upgrade health check failed"
@@ -835,6 +870,11 @@ perform_uninstall() {
     rm -f /usr/bin/xbctl 2>/dev/null || true
     if [ "$PURGE" -eq 1 ]; then
         rm -rf "$INSTALL_ROOT"
+        if [ -f "$SYSCTL_FILE" ]; then
+            rm -f "$SYSCTL_FILE"
+            sysctl --system >/dev/null 2>&1 || true
+            log_info "Removed ${SYSCTL_FILE}"
+        fi
         log_info "Removed ${INSTALL_ROOT}"
     else
         rm -f "$INSTALL_META"
@@ -848,6 +888,7 @@ perform_status() {
     echo
     echo -e "${BOLD}xboard-node install status${NC}"
     echo "  state:   ${CURRENT_STATE}"
+    echo "  bbr:     $(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
     if [ -f "$INSTALL_META" ]; then
         echo "  meta:    ${INSTALL_META}"
         if [ -x "$CLI_PATH" ]; then
