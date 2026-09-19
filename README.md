@@ -16,10 +16,10 @@ This repository is the official `Xboard-Node-src-20260918` source snapshot, publ
 
 ## One-click install (Linux systemd)
 
-Use the Release copy of `install.sh` (this works without merging to `main`). The installer is the same as official `Xboard-Node-src-20260918`: it installs `xboard-node` + `xbctl`, writes `/etc/xboard-node`, and enables `xboard-node.service`.
+Use the Release copy of `install.sh` (this works without merging to `main`). The installer is the same as official `Xboard-Node-src-20260918`: it installs `xboard-node` + `xbctl`, writes `/etc/xboard-node`, and enables `xboard-node.service`. Default kernel is `xray` (`--kernel singbox` to switch).
 
 ```bash
-# Node mode
+# Node mode (default kernel: xray)
 curl -fsSL https://github.com/chongtou-ai/node/releases/latest/download/install.sh | \
   sudo bash -s -- --mode node --panel https://panel.example.com --token TOKEN --node-id 1
 
