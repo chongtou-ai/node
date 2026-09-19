@@ -99,6 +99,9 @@ func (c *Client) Handshake() (*HandshakeResponse, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&hs); err != nil {
 		return nil, fmt.Errorf("decode handshake: %w", err)
 	}
+	if hs.WebSocket.WSURL != "" {
+		hs.WebSocket.WSURL = resolvePanelWSURL(c.baseURL, hs.WebSocket.WSURL)
+	}
 	return &hs, nil
 }
 
