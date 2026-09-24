@@ -102,15 +102,15 @@ type PanelConfig struct {
 }
 
 type NodeConfig struct {
-	PushInterval         int `yaml:"push_interval"`
-	PullInterval         int `yaml:"pull_interval"`
+	PushInterval         int `yaml:"push_interval"`          // member traffic/alive/online (sec), default 60
+	PullInterval         int `yaml:"pull_interval"`          // sec, default 60
 	TrackInterval        int `yaml:"track_interval"`         // sec, default 10
 	DeviceReportInterval int `yaml:"device_report_interval"` // sec, default 30
 }
 
 // WSConfig holds WebSocket client tuning options.
 type WSConfig struct {
-	StatusInterval    int `yaml:"status_interval"`    // node.status interval (sec), default 10
+	StatusInterval    int `yaml:"status_interval"`    // server status interval (sec), default 3
 	HandshakeTimeout  int `yaml:"handshake_timeout"`  // WS handshake timeout (sec), default 15
 	BackoffInitial    int `yaml:"backoff_initial"`    // initial reconnect delay (sec), default 1
 	BackoffMax        int `yaml:"backoff_max"`        // max reconnect delay (sec), default 60
@@ -580,7 +580,7 @@ func (c *Config) setDefaultsFrom(baseDir string) {
 	}
 	// WS defaults
 	if c.WS.StatusInterval == 0 {
-		c.WS.StatusInterval = 10
+		c.WS.StatusInterval = 3
 	}
 	if c.WS.HandshakeTimeout == 0 {
 		c.WS.HandshakeTimeout = 15

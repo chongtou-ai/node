@@ -89,6 +89,15 @@ panel:
 	if cfg.Cert.CertDir != expectedCertDir {
 		t.Errorf("default cert_dir: got %q, want %q", cfg.Cert.CertDir, expectedCertDir)
 	}
+	if cfg.WS.StatusInterval != 3 {
+		t.Errorf("default ws.status_interval: got %d, want 3", cfg.WS.StatusInterval)
+	}
+	if cfg.Node.TrackInterval != 10 {
+		t.Errorf("default node.track_interval: got %d, want 10", cfg.Node.TrackInterval)
+	}
+	if cfg.Node.DeviceReportInterval != 30 {
+		t.Errorf("default node.device_report_interval: got %d, want 30", cfg.Node.DeviceReportInterval)
+	}
 }
 
 func TestLoad_MissingURL(t *testing.T) {

@@ -83,7 +83,7 @@ type WSClient struct {
 func NewWSClient(wsURL string, token string, nodeID int, cfg WSClientConfig, onEvent func(WSEvent), onStatus func(WSStatusChange), onPing func() map[string]interface{}) *WSClient {
 	// Apply defaults
 	if cfg.StatusInterval == 0 {
-		cfg.StatusInterval = 10 * time.Second
+		cfg.StatusInterval = 3 * time.Second
 	}
 	if cfg.HandshakeTimeout == 0 {
 		cfg.HandshakeTimeout = 15 * time.Second

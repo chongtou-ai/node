@@ -49,16 +49,17 @@ type Service struct {
 		Users  []model.UserSpec
 	}
 
-	pushInterval int // seconds
+	pushInterval int // seconds — member traffic/alive/online report
 	pullInterval int // seconds
 
 	lastUsersMD5   string     // md5 checksum of user list for change detection
 	lastConfigHash string     // hash of full config for change detection
 	pullBackoff    apiBackoff // backoff for panel pull failures
-	pushBackoff    apiBackoff // backoff for panel push failures
+	pushBackoff    apiBackoff // backoff for panel membership push failures
 
-	// pushActive prevents overlapping pull goroutines.
+	// pushActive prevents overlapping membership report goroutines.
 	pushActive      atomic.Bool
+	statusActive    atomic.Bool
 	pullActive      atomic.Bool
 	usersPullActive atomic.Bool
 	// pullResults delivers async pullViaAPI results back to the main goroutine.
@@ -182,9 +183,17 @@ func (s *Service) Run(ctx context.Context) error {
 
 	// Set up tickers
 	trackTicker := time.NewTicker(time.Duration(s.cfg.Node.TrackInterval) * time.Second)
+	// Membership (traffic/alive/online) uses push_interval; default 60s.
 	pushInterval := time.Duration(math.Max(float64(s.pushInterval), 5)) * time.Second
 	pullInterval := time.Duration(s.pullInterval) * time.Second
+	// Server status uses ws.status_interval; default 3s (WS node.status, or REST when WS is down).
+	statusIntervalSec := s.cfg.WS.StatusInterval
+	if statusIntervalSec <= 0 {
+		statusIntervalSec = 3
+	}
+	statusInterval := time.Duration(statusIntervalSec) * time.Second
 	reportTicker := time.NewTicker(pushInterval)
+	statusTicker := time.NewTicker(statusInterval)
 	pullTicker := time.NewTicker(pullInterval)
 	deviceReportTicker := time.NewTicker(time.Duration(s.cfg.Node.DeviceReportInterval) * time.Second)
 
@@ -195,6 +204,7 @@ func (s *Service) Run(ctx context.Context) error {
 
 	defer trackTicker.Stop()
 	defer reportTicker.Stop()
+	defer statusTicker.Stop()
 	defer pullTicker.Stop()
 	defer deviceReportTicker.Stop()
 	defer wsDiscoveryTicker.Stop()
@@ -211,7 +221,10 @@ func (s *Service) Run(ctx context.Context) error {
 			s.trackAndEnforce(ctx)
 
 		case <-reportTicker.C:
-			s.pushReportAsync()
+			s.pushMemberReportAsync()
+
+		case <-statusTicker.C:
+			s.pushStatusReportAsync()
 
 		case <-deviceReportTicker.C:
 			s.reportDevices()
@@ -1064,18 +1077,20 @@ func (s *Service) trackAndEnforce(ctx context.Context) {
 	}
 }
 
-// pushReportAsync sends the report in a background goroutine so the select
-// loop is never blocked by slow HTTP. Only one push runs at a time.
-func (s *Service) pushReportAsync() {
+// pushMemberReportAsync pushes membership traffic/alive/online to the panel.
+// Interval is node.push_interval (default 60s). Status fields are still included
+// for panels that expect a consolidated report, but frequent status updates use
+// pushStatusReportAsync / WS node.status instead.
+func (s *Service) pushMemberReportAsync() {
 	if !s.sink.SupportsReporting() {
 		return
 	}
 	if !s.pushActive.CompareAndSwap(false, true) {
-		nlog.Core().Debug("push already in progress, skipping")
+		nlog.Core().Debug("member push already in progress, skipping")
 		return
 	}
 	if s.pushBackoff.shouldSkip() {
-		nlog.Core().Debug("skipping report due to backoff")
+		nlog.Core().Debug("skipping member report due to backoff")
 		s.pushActive.Store(false)
 		return
 	}
@@ -1090,7 +1105,7 @@ func (s *Service) pushReportAsync() {
 	go func() {
 		defer s.pushActive.Store(false)
 		if err := s.sink.Report(controlplane.ReportPayload{Traffic: traffic, Alive: aliveIPs, Online: online, CPU: status.CPU, Mem: [2]uint64{status.MemTotal, status.MemUsed}, Swap: [2]uint64{status.SwapTotal, status.SwapUsed}, Disk: [2]uint64{status.DiskTotal, status.DiskUsed}, Metrics: metrics}); err != nil {
-			nlog.Core().Warn("failed to push report", "error", err)
+			nlog.Core().Warn("failed to push member report", "error", err)
 			if len(traffic) > 0 {
 				s.tracker.RestoreTraffic(traffic)
 			}
@@ -1102,6 +1117,42 @@ func (s *Service) pushReportAsync() {
 		}
 		s.pushBackoff.onSuccess()
 		nlog.ReportPushed(len(traffic), len(online))
+	}()
+}
+
+// pushStatusReportAsync pushes server status/metrics only. Used when WebSocket
+// is unavailable so REST can still refresh status at ws.status_interval (default 3s).
+// When WS is connected, node.status is sent by the WS client instead.
+func (s *Service) pushStatusReportAsync() {
+	if !s.sink.SupportsReporting() {
+		return
+	}
+	s.metricsMu.RLock()
+	wsClient := s.wsClient
+	s.metricsMu.RUnlock()
+	if wsClient != nil && wsClient.IsConnected() {
+		return
+	}
+	if !s.statusActive.CompareAndSwap(false, true) {
+		nlog.Core().Debug("status push already in progress, skipping")
+		return
+	}
+
+	status := monitor.Collect()
+	metrics := s.buildMetrics(status)
+	metrics["kernel_status"] = s.kernel.IsRunning()
+
+	go func() {
+		defer s.statusActive.Store(false)
+		if err := s.sink.Report(controlplane.ReportPayload{
+			CPU:     status.CPU,
+			Mem:     [2]uint64{status.MemTotal, status.MemUsed},
+			Swap:    [2]uint64{status.SwapTotal, status.SwapUsed},
+			Disk:    [2]uint64{status.DiskTotal, status.DiskUsed},
+			Metrics: metrics,
+		}); err != nil {
+			nlog.Core().Warn("failed to push status report", "error", err)
+		}
 	}()
 }
 
