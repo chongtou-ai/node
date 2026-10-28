@@ -801,6 +801,14 @@ func applyTransport(base M, nc *model.NodeSpec) {
 		return
 	}
 
+	switch nc.Network {
+	case "xhttp", "splithttp":
+		// XHTTP is an Xray-only transport; sing-box has no equivalent inbound.
+		nlog.Core().Warn("sing-box does not support xhttp/splithttp transport; use xray kernel for this node",
+			"network", nc.Network)
+		return
+	}
+
 	transport := M{"type": nc.Network}
 
 	if nc.NetworkSettings != nil {
@@ -894,11 +902,14 @@ func buildRealityConfig(nc *model.NodeSpec) M {
 
 	reality := M{"enabled": true}
 	var settings struct {
-		PrivateKey string `mapstructure:"private_key"`
-		ShortID    any    `mapstructure:"short_id"`
-		Dest       string `mapstructure:"dest"`
-		ServerName string `mapstructure:"server_name"`
-		ServerPort int    `mapstructure:"server_port"`
+		PrivateKey   string `mapstructure:"private_key"`
+		ShortID      any    `mapstructure:"short_id"`
+		Dest         string `mapstructure:"dest"`
+		ServerName   string `mapstructure:"server_name"`
+		ServerPort   int    `mapstructure:"server_port"`
+		MinClientVer string `mapstructure:"min_client_ver"`
+		MaxClientVer string `mapstructure:"max_client_ver"`
+		MaxTimeDiff  any    `mapstructure:"max_time_diff"`
 	}
 
 	decoderConfig := &mapstructure.DecoderConfig{
@@ -944,12 +955,62 @@ func buildRealityConfig(nc *model.NodeSpec) M {
 		reality["handshake"] = handshake
 	}
 
+	// Panel sends max_time_diff in milliseconds (same as Xray maxTimeDiff).
+	// sing-box expects a duration string under max_time_difference.
+	if d := formatSingboxDurationMS(settings.MaxTimeDiff); d != "" {
+		reality["max_time_difference"] = d
+	}
+
+	// sing-box Reality has no min/max client version gate (Xray-only).
+	if strings.TrimSpace(settings.MinClientVer) != "" || strings.TrimSpace(settings.MaxClientVer) != "" {
+		nlog.Core().Warn("sing-box Reality ignores min_client_ver/max_client_ver; use xray kernel if you need client version gating",
+			"min_client_ver", settings.MinClientVer, "max_client_ver", settings.MaxClientVer)
+	}
+
 	if settings.ServerName != "" {
 		tls["server_name"] = settings.ServerName
 	}
 
 	tls["reality"] = reality
 	return tls
+}
+
+// formatSingboxDurationMS converts panel max_time_diff (milliseconds) into a
+// sing-box duration string. Empty / zero / unparsable values return "".
+func formatSingboxDurationMS(v any) string {
+	if v == nil {
+		return ""
+	}
+	var ms int64
+	switch n := v.(type) {
+	case int:
+		ms = int64(n)
+	case int64:
+		ms = n
+	case float64:
+		ms = int64(n)
+	case string:
+		s := strings.TrimSpace(n)
+		if s == "" {
+			return ""
+		}
+		parsed, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return ""
+		}
+		ms = parsed
+	default:
+		s := strings.TrimSpace(fmt.Sprintf("%v", v))
+		parsed, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return ""
+		}
+		ms = parsed
+	}
+	if ms <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%dms", ms)
 }
 
 func applyMultiplex(base M, nc *model.NodeSpec) {

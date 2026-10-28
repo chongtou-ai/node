@@ -268,6 +268,39 @@ func TestBuildInbound_VLESS_Reality_ShortIDArray(t *testing.T) {
 	}
 }
 
+func TestBuildInbound_VLESS_Reality_MaxTimeDiff(t *testing.T) {
+	nc := &panel.NodeConfig{
+		Protocol:   "vless",
+		ServerPort: 443,
+		TLS:        2,
+		TLSSettings: map[string]interface{}{
+			"private_key":    "pk",
+			"short_id":       "abc",
+			"server_name":    "www.example.com",
+			"max_time_diff":  60000,
+			"min_client_ver": "0.0.0", // xray-only; sing-box ignores with a warn
+		},
+	}
+	inbound := buildInbound(testNodeSpec(nc), testUsers, kernel.TLSCert{})
+	reality := inbound["tls"].(M)["reality"].(M)
+	assertMapValue(t, reality, "max_time_difference", "60000ms")
+	if _, ok := reality["min_client_ver"]; ok {
+		t.Fatal("sing-box Reality must not emit min_client_ver")
+	}
+}
+
+func TestFormatSingboxDurationMS(t *testing.T) {
+	if got := formatSingboxDurationMS(1500); got != "1500ms" {
+		t.Errorf("got %q, want 1500ms", got)
+	}
+	if got := formatSingboxDurationMS("0"); got != "" {
+		t.Errorf("zero should be empty, got %q", got)
+	}
+	if got := formatSingboxDurationMS(nil); got != "" {
+		t.Errorf("nil should be empty, got %q", got)
+	}
+}
+
 // --- Trojan ---
 
 func TestBuildInbound_Trojan_Reality(t *testing.T) {

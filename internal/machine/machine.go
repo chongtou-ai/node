@@ -374,9 +374,13 @@ func (o *Orchestrator) applyIntervals(bc panel.MachineBaseConfig) {
 	if o.pullInterval < 30*time.Second {
 		o.pullInterval = 60 * time.Second
 	}
-	// Machine status uses local ws.status_interval (default 3s), not panel push_interval.
-	// push_interval remains the per-node membership traffic interval.
-	o.statusInterval = time.Duration(o.cfg.WS.StatusInterval) * time.Second
+	// Prefer panel base_config.status_interval when present; otherwise local
+	// ws.status_interval (default 3s). push_interval is per-node membership traffic.
+	statusSec := bc.StatusInterval
+	if statusSec <= 0 {
+		statusSec = o.cfg.WS.StatusInterval
+	}
+	o.statusInterval = time.Duration(statusSec) * time.Second
 	if o.statusInterval <= 0 {
 		o.statusInterval = 3 * time.Second
 	}

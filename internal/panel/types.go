@@ -77,8 +77,9 @@ type MachineNodesResponse struct {
 
 // MachineBaseConfig holds polling intervals for machine mode.
 type MachineBaseConfig struct {
-	PushInterval int `json:"push_interval"`
-	PullInterval int `json:"pull_interval"`
+	PushInterval   int `json:"push_interval"`
+	PullInterval   int `json:"pull_interval"`
+	StatusInterval int `json:"status_interval"` // server status interval (sec); 0 = use local default
 }
 
 // NodeConfig is the response from GET /api/v1/server/UniProxy/config
