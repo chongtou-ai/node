@@ -300,6 +300,7 @@ func (s *Service) initialSetup(ctx context.Context) error {
 		}
 		return fmt.Errorf("initial config is nil")
 	}
+	ensureProtocolTLSDefaults(bootstrap.Config)
 	if err := validateNodeRuntime(s.cfg, s.kernel.Protocols(), bootstrap.Config, s.cert.TLSCert()); err != nil {
 		return err
 	}
@@ -697,6 +698,7 @@ func (s *Service) applyPullResult(ctx context.Context, result pullResult) {
 	}
 
 	if result.config != nil {
+		ensureProtocolTLSDefaults(result.config)
 		if err := validateNodeRuntime(s.cfg, s.kernel.Protocols(), result.config, s.cert.TLSCert()); err != nil {
 			nlog.Core().Warn("runtime config validation failed", "error", err)
 			result.config = nil
@@ -1328,17 +1330,22 @@ func validateNodeRuntime(cfg *config.Config, kcfgSupported []string, spec *model
 	return nil
 }
 
-func validateTLSRequirements(spec *model.NodeSpec, tls kernel.TLSCert, kernelType string) error {
-	needsCert := false
-	switch spec.Protocol {
-	case "hysteria", "hysteria2", "tuic", "anytls":
-		needsCert = true
-	case "trojan":
-		if spec.TLS != 2 {
-			needsCert = true
-		}
+func protocolRequiresTLSCert(spec *model.NodeSpec) bool {
+	if spec == nil {
+		return false
 	}
-	if needsCert && !hasUsableTLSConfig(spec, tls) {
+	switch strings.ToLower(strings.TrimSpace(spec.Protocol)) {
+	case "hysteria", "hysteria2", "tuic", "anytls":
+		return true
+	case "trojan":
+		return spec.TLS != 2
+	default:
+		return false
+	}
+}
+
+func validateTLSRequirements(spec *model.NodeSpec, tls kernel.TLSCert, kernelType string) error {
+	if protocolRequiresTLSCert(spec) && !hasUsableTLSConfig(spec, tls) {
 		return fmt.Errorf("protocol %q requires TLS certificate files", spec.Protocol)
 	}
 	if spec.TLS == 2 {
@@ -1347,6 +1354,53 @@ func validateTLSRequirements(spec *model.NodeSpec, tls kernel.TLSCert, kernelTyp
 		}
 	}
 	return nil
+}
+
+// ensureProtocolTLSDefaults injects cert_mode=self when a protocol needs TLS
+// material but the panel omitted cert_config (common for anytls + allow_insecure).
+// Without this, validation fails and the inbound never listens.
+func ensureProtocolTLSDefaults(spec *model.NodeSpec) {
+	if !protocolRequiresTLSCert(spec) || hasUsableTLSConfig(spec, kernel.TLSCert{}) {
+		return
+	}
+	domain := tlsFallbackDomain(spec)
+	if spec.CertConfig == nil {
+		spec.CertConfig = &config.CertConfig{}
+	}
+	mode := strings.ToLower(strings.TrimSpace(spec.CertConfig.CertMode))
+	if mode != "" && mode != "none" {
+		// Explicit non-self mode that is incomplete — do not override; validation will fail.
+		return
+	}
+	spec.CertConfig.CertMode = "self"
+	if strings.TrimSpace(spec.CertConfig.Domain) == "" {
+		spec.CertConfig.Domain = domain
+	}
+	nlog.Core().Info("cert: auto-enabling self-signed certificate for protocol without cert_config",
+		"protocol", spec.Protocol, "domain", spec.CertConfig.Domain)
+}
+
+func tlsFallbackDomain(spec *model.NodeSpec) string {
+	if spec == nil {
+		return "localhost"
+	}
+	if sn := strings.TrimSpace(spec.ServerName); sn != "" {
+		return sn
+	}
+	if host := strings.TrimSpace(spec.Host); host != "" {
+		return host
+	}
+	if domain := strings.TrimSpace(spec.Domain); domain != "" {
+		return domain
+	}
+	if spec.TLSSettings != nil {
+		if v, ok := spec.TLSSettings["server_name"]; ok {
+			if sn, ok := v.(string); ok && strings.TrimSpace(sn) != "" {
+				return strings.TrimSpace(sn)
+			}
+		}
+	}
+	return "localhost"
 }
 
 func hasUsableTLSConfig(spec *model.NodeSpec, tls kernel.TLSCert) bool {

@@ -68,6 +68,40 @@ func ResolveKernelForTransport(network, configuredKernel string) string {
 	return configuredKernel
 }
 
+// xrayUnsupportedProtocols are inbound protocols that only sing-box implements.
+var xrayUnsupportedProtocols = map[string]bool{
+	"anytls":    true,
+	"hysteria2": true,
+	"tuic":      true,
+	"naive":     true,
+	"mieru":     true,
+	"socks":     true,
+	"http":      true,
+}
+
+// ResolveKernelForProtocol returns the kernel type required by the given
+// protocol. Xray-only installs are auto-switched to sing-box for protocols
+// that xray-core cannot terminate (e.g. anytls).
+func ResolveKernelForProtocol(protocol, configuredKernel string) string {
+	proto := strings.ToLower(strings.TrimSpace(protocol))
+	kernel := strings.ToLower(strings.TrimSpace(configuredKernel))
+	if kernel == "" {
+		kernel = "singbox"
+	}
+	if (kernel == "xray") && xrayUnsupportedProtocols[proto] {
+		return "singbox"
+	}
+	return configuredKernel
+}
+
+// ResolveKernel picks the kernel that can run the given protocol + transport.
+// Protocol requirements take precedence (e.g. anytls → singbox), then transport
+// (e.g. xhttp → xray).
+func ResolveKernel(network, protocol, configuredKernel string) string {
+	k := ResolveKernelForProtocol(protocol, configuredKernel)
+	return ResolveKernelForTransport(network, k)
+}
+
 func normalizeKernelType(value string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "singbox", "sing-box":

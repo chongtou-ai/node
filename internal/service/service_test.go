@@ -322,6 +322,44 @@ func TestValidateNodeRuntimeAllowsSelfManagedTLSBeforeFilesExist(t *testing.T) {
 	}
 }
 
+func TestEnsureProtocolTLSDefaultsInjectsSelfSignedForAnyTLS(t *testing.T) {
+	spec := &model.NodeSpec{
+		Protocol:   "anytls",
+		ServerPort: 443,
+		ServerName: "www.cloudflare.com",
+		TLSSettings: map[string]any{
+			"server_name":    "www.cloudflare.com",
+			"allow_insecure": true,
+		},
+	}
+	ensureProtocolTLSDefaults(spec)
+	if spec.CertConfig == nil || spec.CertConfig.CertMode != "self" {
+		t.Fatalf("expected cert_mode=self, got %+v", spec.CertConfig)
+	}
+	if spec.CertConfig.Domain != "www.cloudflare.com" {
+		t.Fatalf("domain: got %q", spec.CertConfig.Domain)
+	}
+
+	cfg := &config.Config{Kernel: config.KernelConfig{Type: "singbox"}}
+	if err := validateNodeRuntime(cfg, []string{"anytls"}, spec, kernel.TLSCert{}); err != nil {
+		t.Fatalf("validation after auto self-signed: %v", err)
+	}
+}
+
+func TestEnsureProtocolTLSDefaultsDoesNotOverrideExplicitMode(t *testing.T) {
+	spec := &model.NodeSpec{
+		Protocol: "anytls",
+		CertConfig: &config.CertConfig{
+			CertMode: "dns",
+			// incomplete on purpose
+		},
+	}
+	ensureProtocolTLSDefaults(spec)
+	if spec.CertConfig.CertMode != "dns" {
+		t.Fatalf("should not override explicit mode, got %q", spec.CertConfig.CertMode)
+	}
+}
+
 func TestValidateNodeRuntimeAllowsSingboxRealityWithRequiredFields(t *testing.T) {
 	cfg := &config.Config{Kernel: config.KernelConfig{Type: "singbox"}}
 	err := validateNodeRuntime(cfg, []string{"vless"}, &model.NodeSpec{
