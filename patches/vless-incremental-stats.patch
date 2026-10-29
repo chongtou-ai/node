@@ -1,0 +1,26 @@
+--- a/proxy/vless/inbound/inbound.go
++++ b/proxy/vless/inbound/inbound.go
+@@ -552,7 +552,8 @@
+ 	switch requestAddons.Flow {
+ 	case vless.XRV:
+ 		if account.Flow == requestAddons.Flow {
+-			inbound.CanSpliceCopy = 2
++			// Match VMess: never splice so user stats increment per buffer.
++			inbound.CanSpliceCopy = 3
+ 			switch request.Command {
+ 			case protocol.RequestCommandUDP:
+ 				return errors.New(requestAddons.Flow + " doesn't support UDP").AtWarning()
+
+--- a/proxy/proxy.go
++++ b/proxy/proxy.go
+@@ -651,8 +651,9 @@
+ 				if !ok {
+ 					v = "Old cipher: " + strconv.FormatUint(uint64(trafficState.Cipher), 16)
+ 				} else if v != "TLS_AES_128_CCM_8_SHA256" {
+-					trafficState.EnableXtls = true
++					// Keep Vision framing (no XTLS direct copy) so traffic is counted
++					// per-buffer like VMess WebSocket and bandwidth limits stay effective.
++					trafficState.EnableXtls = false
+ 				}
+ 				errors.LogDebug(ctx, "XtlsFilterTls found tls 1.3! ", b.Len(), " ", v)
+ 				trafficState.NumberOfPacketToFilter = 0
