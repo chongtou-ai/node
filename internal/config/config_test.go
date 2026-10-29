@@ -420,6 +420,45 @@ func TestConfig_AutoInstanceIDStable(t *testing.T) {
 	}
 }
 
+func TestLoad_IPv6PanelURL(t *testing.T) {
+	path := writeTemp(t, `
+panel:
+  url: "http://[2406:ef80:1:f51e::1]:7001"
+  token: "tok"
+  machine_id: 19
+machine:
+  machine_id: 19
+  token: "tok"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load IPv6 panel: %v", err)
+	}
+	if cfg.Panel.URL != "http://[2406:ef80:1:f51e::1]:7001" {
+		t.Fatalf("url: got %q", cfg.Panel.URL)
+	}
+	id, err := cfg.AutoInstanceID()
+	if err != nil {
+		t.Fatalf("AutoInstanceID IPv6: %v", err)
+	}
+	if id == "" {
+		t.Fatal("empty instance id")
+	}
+}
+
+func TestNormalizeBaseURL_IPv6(t *testing.T) {
+	normalized, slug, err := normalizeBaseURL("http://[2406:EF80:1:F51E::1]:7001")
+	if err != nil {
+		t.Fatalf("normalizeBaseURL: %v", err)
+	}
+	if normalized != "http://[2406:ef80:1:f51e::1]:7001" {
+		t.Fatalf("normalized: got %q", normalized)
+	}
+	if slug == "" {
+		t.Fatal("empty slug")
+	}
+}
+
 func TestLoadRoot_InheritanceFromTopLevel(t *testing.T) {
 	path := writeTemp(t, `
 log:

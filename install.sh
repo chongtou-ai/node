@@ -30,11 +30,25 @@ DEFAULT_LOG_LEVEL="info"
 DEFAULT_KERNEL_LOG_LEVEL="warn"
 DEFAULT_DOWNLOAD_BASE="https://github.com/chongtou-ai/node/releases"
 FALLBACK_DOWNLOAD_BASE="https://github.com/cedar2025/xboard-node/releases"
-GITHUB_MIRRORS=(
+# Empty prefix = direct GitHub. github.com has no AAAA, so pure-IPv6 hosts must
+# use an IPv6-capable proxy first (see select_github_mirrors).
+GITHUB_MIRRORS_DEFAULT=(
     ""
     "https://ghfast.top/"
     "https://ghproxy.net/"
+    "https://ghps.cc/"
+    "https://gh.ddlc.top/"
 )
+# Proxies known to publish AAAA records (usable on IPv6-only VPS).
+GITHUB_MIRRORS_IPV6=(
+    "https://ghproxy.net/"
+    "https://ghps.cc/"
+    "https://gh.ddlc.top/"
+    "https://gh.idayer.com/"
+)
+GITHUB_MIRRORS=("${GITHUB_MIRRORS_DEFAULT[@]}")
+CURL_IP_FLAGS=()
+IPV6_ONLY=0
 
 ACTION="${DEFAULT_ACTION}"
 MODE=""
@@ -208,8 +222,15 @@ usage() {
   EXAMPLES:
     sudo bash install.sh --panel https://panel.example.com --token TOKEN --node-id 1
     sudo bash install.sh --panel https://panel.example.com --token TOKEN --machine-id 1
+    sudo bash install.sh --panel 'http://[2001:db8::1]:7001' --token TOKEN --machine-id 1
     sudo bash install.sh upgrade
     sudo bash install.sh uninstall --purge --yes
+
+  PURE IPv6:
+    github.com has no AAAA. Fetch install.sh via an IPv6-capable mirror/CDN, then this
+    script auto-selects IPv6 GitHub mirrors for binary downloads:
+      curl -fsSL 'https://ghproxy.net/https://github.com/chongtou-ai/node/releases/latest/download/install.sh' | sudo bash -s -- ...
+      curl -fsSL 'https://cdn.jsdelivr.net/gh/chongtou-ai/node@main/install.sh' | sudo bash -s -- ...
 
 HELP
 }
@@ -357,6 +378,49 @@ detect_os() {
     else
         OS="unknown"
     fi
+}
+
+# True when the host has no usable IPv4 (pure IPv6 VPS). github.com lacks AAAA,
+# so binary downloads must go through an IPv6-capable mirror.
+is_ipv6_only_host() {
+    local has_v4=0 has_v6=0
+    if command -v ip >/dev/null 2>&1; then
+        if ip -4 -o addr show scope global 2>/dev/null | grep -q .; then
+            has_v4=1
+        fi
+        if ip -6 -o addr show scope global 2>/dev/null | grep -q .; then
+            has_v6=1
+        fi
+    else
+        # Fallback without iproute2.
+        if hostname -I 2>/dev/null | grep -qE '(^| )[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+( |$)'; then
+            has_v4=1
+        fi
+        if hostname -I 2>/dev/null | grep -qE '(^| )[0-9a-fA-F:]*:[0-9a-fA-F:]+( |$)'; then
+            has_v6=1
+        elif [ -s /proc/net/if_inet6 ] && awk 'length($1)==32 && $1 != "00000000000000000000000000000001" {found=1} END{exit !found}' /proc/net/if_inet6 2>/dev/null; then
+            has_v6=1
+        fi
+    fi
+    [ "$has_v4" -eq 0 ] && [ "$has_v6" -eq 1 ]
+}
+
+select_github_mirrors() {
+    GITHUB_MIRRORS=("${GITHUB_MIRRORS_DEFAULT[@]}")
+    CURL_IP_FLAGS=()
+    IPV6_ONLY=0
+    if is_ipv6_only_host; then
+        IPV6_ONLY=1
+        GITHUB_MIRRORS=("${GITHUB_MIRRORS_IPV6[@]}")
+        CURL_IP_FLAGS=(-6)
+        log_warn "Detected IPv6-only host; using IPv6 GitHub mirrors (github.com has no AAAA)"
+    fi
+}
+
+# curl wrapper: disable URL globbing so panel IPv6 literals like http://[::1]:7001
+# are not expanded, and prefer -6 on pure-IPv6 hosts.
+curl_fetch() {
+    curl -g "${CURL_IP_FLAGS[@]}" "$@"
 }
 
 ensure_systemd() {
@@ -552,7 +616,7 @@ download_http() {
             prefixed="$url"
         fi
         log_step "Downloading ${url##*/}: ${prefixed}"
-        if curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 180 "$prefixed" -o "$dest"; then
+        if curl_fetch -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 180 "$prefixed" -o "$dest"; then
             if is_elf_binary "$dest"; then
                 DOWNLOAD_URL="$prefixed"
                 return 0
@@ -563,6 +627,11 @@ download_http() {
         fi
         rm -f "$dest"
     done
+    if [ "$IPV6_ONLY" -eq 1 ]; then
+        log_error "All IPv6 GitHub mirrors failed. On pure-IPv6 hosts github.com is unreachable (no AAAA)."
+        log_error "Bootstrap the installer via an IPv6-capable CDN, e.g.:"
+        log_error "  curl -fsSL https://cdn.jsdelivr.net/gh/chongtou-ai/node@latest/install.sh | sudo bash -s -- ..."
+    fi
     return 1
 }
 
@@ -764,7 +833,9 @@ wait_for_health() {
         if ! systemctl is-active "$SERVICE_NAME" >/dev/null 2>&1; then
             return 1
         fi
-        if curl -fsS "http://127.0.0.1:${HEALTH_PORT}/healthz" >/dev/null 2>&1; then
+        # Prefer IPv4 loopback, then IPv6 — pure-IPv6 hosts often lack 127.0.0.1.
+        if curl_fetch -fsS "http://127.0.0.1:${HEALTH_PORT}/healthz" >/dev/null 2>&1 \
+            || curl_fetch -fsS "http://[::1]:${HEALTH_PORT}/healthz" >/dev/null 2>&1; then
             return 0
         fi
         sleep 1
@@ -812,7 +883,7 @@ perform_install() {
     log_info "Config: ${CONFIG_FILE}"
     log_info "Credentials: ${CREDENTIALS_FILE}"
     if [ "$HEALTH_ENABLED" -eq 1 ]; then
-        log_info "Health: http://127.0.0.1:${HEALTH_PORT}/healthz"
+        log_info "Health: http://127.0.0.1:${HEALTH_PORT}/healthz (or http://[::1]:${HEALTH_PORT}/healthz)"
     fi
     log_info "CLI: ${CLI_PATH}  (run '${CLI_PATH} list' if xbctl is not in PATH)"
 }
@@ -926,6 +997,7 @@ main() {
     check_root
     detect_arch
     detect_os
+    select_github_mirrors
     ensure_systemd
     install_dependencies
 

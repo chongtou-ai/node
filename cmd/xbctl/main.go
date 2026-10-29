@@ -1115,15 +1115,18 @@ func instanceAwareHealth() string {
 	if port == 0 {
 		return "disabled"
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/healthz", port)
 	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return "down"
-	}
-	resp.Body.Close()
-	if resp.StatusCode == 200 {
-		return "ok"
+	// Try IPv4 then IPv6 loopback — pure-IPv6 hosts may lack 127.0.0.1.
+	for _, host := range []string{"127.0.0.1", "[::1]"} {
+		resp, err := client.Get(fmt.Sprintf("http://%s:%d/healthz", host, port))
+		if err != nil {
+			continue
+		}
+		code := resp.StatusCode
+		resp.Body.Close()
+		if code == http.StatusOK {
+			return "ok"
+		}
 	}
 	return "down"
 }
