@@ -1,0 +1,5 @@
+6191a96cb5e4bb8cacd93fef90a5d99556f3a11c8686361ea600c3436090e274  udp-uplink-relay-linux-amd64.gz
+f70ce9d04b14b6dd326a46c35cc7610a0c79202afc17aeb198549d416830d254  udp-uplink-relay-linux-arm64.gz
+# uncompressed (verified by install.sh after gunzip):
+# aae94e93c6ef437b1bf5786c0f54716115da1d2a07a913343c098cdfbea766c8  udp-uplink-relay-linux-amd64
+# f68736e943c5a684d427571df6493880a61bd9a4131fe6cea5e43fc869f67899  udp-uplink-relay-linux-arm64
