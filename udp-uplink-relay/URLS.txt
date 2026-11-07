@@ -1,0 +1,10 @@
+# Permanent install. Tag udp-uplink-relay-v1 on public repo chongtou-ai/node.
+# Binaries are the udp-uplink-relay-v2 build (linux amd64 + arm64).
+
+curl -fsSL https://raw.githubusercontent.com/chongtou-ai/node/udp-uplink-relay-v1/udp-uplink-relay/install.sh | sudo bash -s -- \
+  --udp-listen 上行IP:443 \
+  --ack-listen 回程IP:8444 \
+  --xhttp-host 节点Host \
+  --local-port 8081
+
+# --local-port sets 127.0.0.1:PORT (default 8081). Or pass --target HOST:PORT.
