@@ -23,6 +23,10 @@ var (
 	trafficMapPool = sync.Pool{New: func() interface{} { return make(map[string][2]int64) }}
 	aliveMapPool   = sync.Pool{New: func() interface{} { return make(map[string][]string) }}
 	onlineMapPool  = sync.Pool{New: func() interface{} { return make(map[string]int) }}
+
+	// ErrNotModified is returned by GetUsers/GetConfig helpers when the panel
+	// replies 304. Callers must NOT treat this as an empty payload.
+	ErrNotModified = fmt.Errorf("not modified")
 )
 
 // Client communicates with the Xboard panel API.
@@ -36,6 +40,7 @@ type Client struct {
 	machineID  int
 	httpClient *http.Client
 
+	etagMu     sync.Mutex
 	configETag string
 	userETag   string
 
@@ -79,7 +84,9 @@ func (c *Client) ForNode(nodeID int) *Client {
 // returns a full response instead of 304. Used by machine mode after a
 // pre-fetch to probe the transport type.
 func (c *Client) ResetConfigETag() {
+	c.etagMu.Lock()
 	c.configETag = ""
+	c.etagMu.Unlock()
 }
 
 // Handshake calls the new v2 API to get WS config + initial data in one shot.
@@ -215,9 +222,13 @@ func (c *Client) userPath() string {
 	return "/api/v1/server/UniProxy/user"
 }
 
-// GetConfig fetches node configuration. Returns nil if not modified (304).
+// GetConfig fetches node configuration. Returns (nil, nil) if not modified (304).
 func (c *Client) GetConfig() (*NodeConfig, error) {
-	resp, err := c.doRequest("GET", c.configPath(), nil, c.configETag)
+	c.etagMu.Lock()
+	etag := c.configETag
+	c.etagMu.Unlock()
+
+	resp, err := c.doRequest("GET", c.configPath(), nil, etag)
 	if err != nil {
 		return nil, fmt.Errorf("get config: %w", err)
 	}
@@ -248,21 +259,28 @@ func (c *Client) GetConfig() (*NodeConfig, error) {
 	}
 
 	if etag := resp.Header.Get("ETag"); etag != "" {
+		c.etagMu.Lock()
 		c.configETag = etag
+		c.etagMu.Unlock()
 	}
 	return &cfg, nil
 }
 
-// GetUsers fetches available users. Returns nil if not modified (304).
+// GetUsers fetches available users.
+// Returns (nil, ErrNotModified) on HTTP 304 — callers must not treat that as an empty user list.
 func (c *Client) GetUsers() ([]User, error) {
-	resp, err := c.doRequest("GET", c.userPath(), nil, c.userETag)
+	c.etagMu.Lock()
+	etag := c.userETag
+	c.etagMu.Unlock()
+
+	resp, err := c.doRequest("GET", c.userPath(), nil, etag)
 	if err != nil {
 		return nil, fmt.Errorf("get users: %w", err)
 	}
 	defer drainAndClose(resp.Body)
 
 	if resp.StatusCode == http.StatusNotModified {
-		return nil, nil
+		return nil, ErrNotModified
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
@@ -275,7 +293,12 @@ func (c *Client) GetUsers() ([]User, error) {
 	}
 
 	if etag := resp.Header.Get("ETag"); etag != "" {
+		c.etagMu.Lock()
 		c.userETag = etag
+		c.etagMu.Unlock()
+	}
+	if usersResp.Users == nil {
+		return []User{}, nil
 	}
 	return usersResp.Users, nil
 }
@@ -317,8 +340,10 @@ func (c *Client) PushStatus(cpu float64, mem, swap, disk [2]uint64) error {
 
 // ResetETags clears cached ETags, forcing full responses
 func (c *Client) ResetETags() {
+	c.etagMu.Lock()
 	c.configETag = ""
 	c.userETag = ""
+	c.etagMu.Unlock()
 }
 
 // GetMachineNodes fetches the list of active nodes bound to this machine.

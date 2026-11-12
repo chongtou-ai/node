@@ -144,11 +144,11 @@ func TestGetUsers_NotModified(t *testing.T) {
 		t.Fatalf("first call: got %d users", len(users))
 	}
 	users, err := client.GetUsers()
-	if err != nil {
-		t.Fatalf("second GetUsers: %v", err)
+	if err != ErrNotModified {
+		t.Fatalf("second GetUsers: err=%v, want ErrNotModified", err)
 	}
 	if users != nil {
-		t.Error("expected nil for 304")
+		t.Error("expected nil users for 304")
 	}
 }
 

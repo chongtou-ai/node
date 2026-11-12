@@ -138,7 +138,9 @@ func UserDiff(oldUsers, newUsers []model.UserSpec) (toAdd, toRemove []model.User
 		}
 	}
 	for _, u := range oldUsers {
-		if _, exists := newMap[u.ID]; !exists {
+		neu, exists := newMap[u.ID]
+		// Missing ID, or same ID with rotated UUID — drop the old identity.
+		if !exists || neu.UUID != u.UUID {
 			toRemove = append(toRemove, u)
 		}
 	}

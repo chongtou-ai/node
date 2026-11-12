@@ -238,54 +238,68 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 		tag := inb.Tag
 		if !configChanged {
 			if existing, ok := im.Get(tag); ok && existing.Type() == inb.Type {
+				updated := false
 				var err error
 				switch v := existing.(type) {
 				case adapter.UpdatableInbound[option.VMessUser]:
 					if opts, ok := inb.Options.(*option.VMessInboundOptions); ok {
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableInbound[option.VLESSUser]:
 					if opts, ok := inb.Options.(*option.VLESSInboundOptions); ok {
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableInbound[option.TrojanUser]:
 					if opts, ok := inb.Options.(*option.TrojanInboundOptions); ok {
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableInbound[option.Hysteria2User]:
 					if opts, ok := inb.Options.(*option.Hysteria2InboundOptions); ok {
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableShadowsocksInbound:
 					if opts, ok := inb.Options.(*option.ShadowsocksInboundOptions); ok {
 						err = v.UpdateUsersByOptions(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableInbound[option.TUICUser]:
 					if opts, ok := inb.Options.(*option.TUICInboundOptions); ok {
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableInbound[option.AnyTLSUser]:
 					if opts, ok := inb.Options.(*option.AnyTLSInboundOptions); ok {
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableInbound[option.MieruUser]:
 					if opts, ok := inb.Options.(*option.MieruInboundOptions); ok {
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				case adapter.UpdatableInbound[auth.User]:
 					switch opts := inb.Options.(type) {
 					case *option.NaiveInboundOptions:
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					case *option.SocksInboundOptions:
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					case *option.HTTPMixedInboundOptions:
 						err = v.UpdateUsers(opts.Users)
+						updated = true
 					}
 				}
-				if err == nil {
+				if updated && err == nil {
 					continue
 				}
-				nlog.Core().Warn("incremental update failed, falling back to recreate", "tag", tag, "error", err)
+				if err != nil {
+					nlog.Core().Warn("incremental update failed, falling back to recreate", "tag", tag, "error", err)
+				}
 			}
 		}
 
@@ -548,54 +562,68 @@ func (s *SingBox) reloadInboundsLocked(users []model.UserSpec) error {
 	for _, inb := range opts.Inbounds {
 		tag := inb.Tag
 		if existing, ok := im.Get(tag); ok && existing.Type() == inb.Type {
+			updated := false
 			var err error
 			switch v := existing.(type) {
 			case adapter.UpdatableInbound[option.VMessUser]:
 				if opts, ok := inb.Options.(*option.VMessInboundOptions); ok {
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableInbound[option.VLESSUser]:
 				if opts, ok := inb.Options.(*option.VLESSInboundOptions); ok {
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableInbound[option.TrojanUser]:
 				if opts, ok := inb.Options.(*option.TrojanInboundOptions); ok {
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableInbound[option.Hysteria2User]:
 				if opts, ok := inb.Options.(*option.Hysteria2InboundOptions); ok {
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableShadowsocksInbound:
 				if opts, ok := inb.Options.(*option.ShadowsocksInboundOptions); ok {
 					err = v.UpdateUsersByOptions(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableInbound[option.TUICUser]:
 				if opts, ok := inb.Options.(*option.TUICInboundOptions); ok {
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableInbound[option.AnyTLSUser]:
 				if opts, ok := inb.Options.(*option.AnyTLSInboundOptions); ok {
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableInbound[option.MieruUser]:
 				if opts, ok := inb.Options.(*option.MieruInboundOptions); ok {
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			case adapter.UpdatableInbound[auth.User]:
 				switch opts := inb.Options.(type) {
 				case *option.NaiveInboundOptions:
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				case *option.SocksInboundOptions:
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				case *option.HTTPMixedInboundOptions:
 					err = v.UpdateUsers(opts.Users)
+					updated = true
 				}
 			}
-			if err == nil {
+			if updated && err == nil {
 				continue
 			}
-			nlog.Core().Warn("incremental update failed, recreating inbound", "tag", tag, "error", err)
+			if err != nil {
+				nlog.Core().Warn("incremental update failed, recreating inbound", "tag", tag, "error", err)
+			}
 		}
 
 		_ = im.Remove(tag)

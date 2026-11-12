@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -670,6 +671,18 @@ func (s *Service) pullUsersViaAPIAsync(ctx context.Context) {
 		}
 
 		users, err := uf.FetchPanelUsers(ctx)
+		if errors.Is(err, panel.ErrNotModified) {
+			// Stale in-flight ETag raced with ResetETags. Force a full body and retry once.
+			nlog.Core().Warn("users fetch returned 304 after md5 change; retrying without etag")
+			if r, ok := s.source.(etagResetter); ok {
+				r.ResetETags()
+			}
+			users, err = uf.FetchPanelUsers(ctx)
+		}
+		if errors.Is(err, panel.ErrNotModified) {
+			nlog.Core().Warn("users fetch still not modified; skipping apply to avoid wiping users")
+			return
+		}
 		if err != nil {
 			nlog.Core().Error("fetch users failed", "error", err)
 			return
@@ -816,6 +829,20 @@ func (s *Service) ensureRunning() bool {
 // applyUserUpdate replaces the full user set and hot-swaps the kernel.
 // Called from WS sync.users and REST polling.
 func (s *Service) applyUserUpdate(ctx context.Context, users []model.UserSpec, newMD5 string) {
+	if users == nil {
+		users = []model.UserSpec{}
+	}
+	// Guard against a 304/empty false positive wiping a live user set. A real
+	// empty list still applies when the panel MD5 matches the empty checksum.
+	if len(users) == 0 && len(s.lastUsers) > 0 {
+		emptyMD5 := computeUsersMD5FromSpecs(nil)
+		if newMD5 == "" || newMD5 != emptyMD5 {
+			nlog.Core().Warn("refusing to apply empty user list over non-empty local set",
+				"local_users", len(s.lastUsers), "remote_md5", newMD5)
+			return
+		}
+	}
+
 	prevUsers, prevHash := s.prepareUserState(users)
 	if newMD5 != "" {
 		s.lastUsersMD5 = newMD5

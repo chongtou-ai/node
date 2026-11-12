@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cedar2025/xboard-node/internal/config"
@@ -124,9 +125,6 @@ func (p *MachinePanelControlPlane) FetchPanelUsers(ctx context.Context) ([]panel
 		return nil, ctx.Err()
 	default:
 	}
-	if users == nil {
-		return []panel.User{}, nil
-	}
 	return users, nil
 }
 
@@ -137,7 +135,11 @@ func (p *MachinePanelControlPlane) Poll(ctx context.Context) (Snapshot, error) {
 	}
 	users, err := p.client.GetUsers()
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("machine poll users: %w", err)
+		if errors.Is(err, panel.ErrNotModified) {
+			users = nil
+		} else {
+			return Snapshot{}, fmt.Errorf("machine poll users: %w", err)
+		}
 	}
 	select {
 	case <-ctx.Done():
@@ -148,7 +150,11 @@ func (p *MachinePanelControlPlane) Poll(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("machine poll normalize: %w", err)
 	}
-	return Snapshot{Config: nodeSpec, Users: model.UserSpecsFromPanel(users)}, nil
+	snap := Snapshot{Config: nodeSpec}
+	if users != nil {
+		snap.Users = model.UserSpecsFromPanel(users)
+	}
+	return snap, nil
 }
 
 func (p *MachinePanelControlPlane) Discover(

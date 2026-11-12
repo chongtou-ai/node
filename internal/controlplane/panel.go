@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -79,7 +80,11 @@ func (p *PanelControlPlane) Poll(ctx context.Context) (Snapshot, error) {
 	}
 	users, err := p.client.GetUsers()
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("poll users: %w", err)
+		if errors.Is(err, panel.ErrNotModified) {
+			users = nil
+		} else {
+			return Snapshot{}, fmt.Errorf("poll users: %w", err)
+		}
 	}
 	select {
 	case <-ctx.Done():
@@ -90,7 +95,11 @@ func (p *PanelControlPlane) Poll(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("poll config normalize: %w", err)
 	}
-	return Snapshot{Config: nodeSpec, Users: model.UserSpecsFromPanel(users)}, nil
+	snap := Snapshot{Config: nodeSpec}
+	if users != nil {
+		snap.Users = model.UserSpecsFromPanel(users)
+	}
+	return snap, nil
 }
 
 func (p *PanelControlPlane) PollConfig(ctx context.Context) (*model.NodeSpec, error) {
@@ -115,9 +124,6 @@ func (p *PanelControlPlane) FetchPanelUsers(ctx context.Context) ([]panel.User, 
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-	}
-	if users == nil {
-		return []panel.User{}, nil
 	}
 	return users, nil
 }
