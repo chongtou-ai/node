@@ -11,7 +11,7 @@ import (
 const (
 	defaultSpeedDownPath = "/__down"
 	defaultSpeedDownSize = int64(1 << 20)   // 1 MiB when bytes= omitted
-	maxSpeedDownBytes    = int64(200 << 20) // 200 MiB hard cap
+	maxSpeedDownBytes    = int64(5 << 30) // 5 GiB hard cap
 	speedDownChunkSize   = 64 << 10         // 64 KiB write chunks
 )
 

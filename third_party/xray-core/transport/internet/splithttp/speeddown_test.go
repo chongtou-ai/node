@@ -55,6 +55,35 @@ func TestSpeedDownEndpoint(t *testing.T) {
 	}
 }
 
+func TestSpeedDownCapsAt5GiB(t *testing.T) {
+	listenPort := tcp.PickPort()
+	streamSettings := &internet.MemoryStreamConfig{
+		ProtocolName: "splithttp",
+		ProtocolSettings: &Config{
+			Path:          "/xhttp",
+			SpeedDownPath: "/__down",
+		},
+	}
+	listen, err := ListenXH(context.Background(), net.LocalHostIP, listenPort, streamSettings, func(conn stat.Connection) {
+		go func() { _ = conn.Close() }()
+	})
+	common.Must(err)
+	defer listen.Close()
+
+	base := "http://" + net.LocalHostIP.String() + ":" + listenPort.String()
+	req, err := http.NewRequest(http.MethodHead, base+"/__down?bytes=999999999999", nil)
+	common.Must(err)
+	resp, err := http.DefaultClient.Do(req)
+	common.Must(err)
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if resp.Header.Get("Content-Length") != "5368709120" { // 5 GiB
+		t.Fatalf("Content-Length=%q want 5368709120", resp.Header.Get("Content-Length"))
+	}
+}
+
 func TestSpeedDownDisabled(t *testing.T) {
 	listenPort := tcp.PickPort()
 	streamSettings := &internet.MemoryStreamConfig{
