@@ -543,15 +543,33 @@ func applyStreamSettings(base M, nc *model.NodeSpec, tc kernel.TLSCert) {
 			if v, ok := nc.NetworkSettings["mode"]; ok {
 				xhttpSettings["mode"] = v
 			}
+			// Cloudflare-style download endpoint on the xhttp listener.
+			// Panel: networkSettings.speedDownPath = "/__down" (default) or "off".
+			if v, ok := nc.NetworkSettings["speedDownPath"]; ok {
+				xhttpSettings["speedDownPath"] = v
+			} else if v, ok := nc.NetworkSettings["speed_down_path"]; ok {
+				xhttpSettings["speedDownPath"] = v
+			}
 			if v, ok := nc.NetworkSettings["extra"]; ok {
 				// PHP sends empty arrays [] instead of {} for empty objects;
 				// xray rejects [] for fields that expect objects (e.g. sockopt, tlsSettings).
 				// Recursively strip empty arrays from the extra map before passing to xray.
 				if m, ok := v.(map[string]interface{}); ok && len(m) > 0 {
 					sanitizeEmptyArrays(m)
+					// Allow speedDownPath inside extra (panel often nests transport opts there).
+					if _, exists := xhttpSettings["speedDownPath"]; !exists {
+						if p, ok := m["speedDownPath"]; ok {
+							xhttpSettings["speedDownPath"] = p
+						} else if p, ok := m["speed_down_path"]; ok {
+							xhttpSettings["speedDownPath"] = p
+						}
+					}
 					xhttpSettings["extra"] = m
 				}
 			}
+		}
+		if _, ok := xhttpSettings["speedDownPath"]; !ok {
+			xhttpSettings["speedDownPath"] = "/__down"
 		}
 		ss["xhttpSettings"] = xhttpSettings
 

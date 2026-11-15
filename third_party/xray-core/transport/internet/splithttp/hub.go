@@ -97,6 +97,17 @@ func (h *requestHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
+	// Cloudflare-style download for link speed tests / camouflage:
+	// GET /__down?during=download&bytes=104857600
+	// Set xhttpSettings.speedDownPath to customize, or "off" to disable.
+	speedPath := defaultSpeedDownPath
+	if h.config != nil && h.config.SpeedDownPath != "" {
+		speedPath = h.config.SpeedDownPath
+	}
+	if !strings.EqualFold(speedPath, "off") && tryServeSpeedDown(writer, request, speedPath) {
+		return
+	}
+
 	if !strings.HasPrefix(request.URL.Path, h.path) {
 		errors.LogInfo(context.Background(), "failed to validate path, request:", request.URL.Path, ", config:", h.path)
 		writer.WriteHeader(http.StatusNotFound)

@@ -187,8 +187,11 @@ type Config struct {
 	UplinkDataKey        string                 `protobuf:"bytes,25,opt,name=uplinkDataKey,proto3" json:"uplinkDataKey,omitempty"`
 	UplinkChunkSize      *RangeConfig           `protobuf:"bytes,26,opt,name=uplinkChunkSize,proto3" json:"uplinkChunkSize,omitempty"`
 	ServerMaxHeaderBytes int32                  `protobuf:"varint,27,opt,name=serverMaxHeaderBytes,proto3" json:"serverMaxHeaderBytes,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// SpeedDownPath is a Cloudflare-compatible download endpoint (default /__down).
+	// Kept as a plain Go field (not in .proto) so in-process JSON Build can set it.
+	SpeedDownPath string `json:"speedDownPath,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Config) Reset() {

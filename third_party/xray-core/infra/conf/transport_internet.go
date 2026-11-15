@@ -245,6 +245,10 @@ type SplitHTTPConfig struct {
 	ServerMaxHeaderBytes int32             `json:"serverMaxHeaderBytes"`
 	Xmux                 XmuxConfig        `json:"xmux"`
 	DownloadSettings     *StreamConfig     `json:"downloadSettings"`
+	// SpeedDownPath enables a Cloudflare-style download endpoint on the xhttp
+	// listener for raw speed tests, e.g. GET /__down?bytes=104857600.
+	// Empty defaults to "/__down". Set to "off" to disable.
+	SpeedDownPath        string            `json:"speedDownPath"`
 	Extra                json.RawMessage   `json:"extra"`
 }
 
@@ -274,6 +278,10 @@ func (c *SplitHTTPConfig) Build() (proto.Message, error) {
 		extra.Host = c.Host
 		extra.Path = c.Path
 		extra.Mode = c.Mode
+		// Preserve outer speedDownPath when extra omits it.
+		if extra.SpeedDownPath == "" {
+			extra.SpeedDownPath = c.SpeedDownPath
+		}
 		c = &extra
 	}
 
@@ -400,6 +408,11 @@ func (c *SplitHTTPConfig) Build() (proto.Message, error) {
 		c.Xmux.HMaxReusableSecs.To = 3000
 	}
 
+	speedDownPath := c.SpeedDownPath
+	if speedDownPath == "" {
+		speedDownPath = "/__down"
+	}
+
 	config := &splithttp.Config{
 		Host:                 c.Host,
 		Path:                 c.Path,
@@ -426,6 +439,7 @@ func (c *SplitHTTPConfig) Build() (proto.Message, error) {
 		ScMaxBufferedPosts:   c.ScMaxBufferedPosts,
 		ScStreamUpServerSecs: newRangeConfig(c.ScStreamUpServerSecs),
 		ServerMaxHeaderBytes: c.ServerMaxHeaderBytes,
+		SpeedDownPath:        speedDownPath,
 		Xmux: &splithttp.XmuxConfig{
 			MaxConcurrency:   newRangeConfig(c.Xmux.MaxConcurrency),
 			MaxConnections:   newRangeConfig(c.Xmux.MaxConnections),
