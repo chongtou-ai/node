@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/cedar2025/xboard-node/internal/config"
@@ -38,6 +39,47 @@ func ValidateNodeSpec(n *NodeSpec, kcfg config.KernelConfig) error {
 	}
 	if err := validateTransportKernel(n.Network, kernelType); err != nil {
 		return err
+	}
+	if err := ValidateXHTTPDownlink(n, kernelType); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateXHTTPDownlink checks the Hysteria2 packet-up downlink.
+// A disabled or absent config is valid.
+func ValidateXHTTPDownlink(n *NodeSpec, kernelType string) error {
+	if n == nil || n.XHTTPDownlink == nil || !n.XHTTPDownlink.Enabled {
+		return nil
+	}
+	dl := n.XHTTPDownlink
+	network := strings.ToLower(strings.TrimSpace(n.Network))
+	if network != "xhttp" && network != "splithttp" {
+		return fmt.Errorf("xhttp_downlink requires network xhttp")
+	}
+	if kernelType != "" && kernelType != "xray" {
+		return fmt.Errorf("xhttp_downlink requires the xray kernel")
+	}
+	mode := ""
+	if n.NetworkSettings != nil {
+		mode, _ = n.NetworkSettings["mode"].(string)
+	}
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "packet-up", "auto":
+	default:
+		return fmt.Errorf("xhttp_downlink only supports packet-up mode, got %q", mode)
+	}
+	if dl.Port <= 0 || dl.Port > 65535 {
+		return fmt.Errorf("xhttp_downlink.port must be between 1 and 65535")
+	}
+	if dl.Port == n.ServerPort {
+		return fmt.Errorf("xhttp_downlink.port must be different from server_port")
+	}
+	if strings.TrimSpace(dl.Password) == "" {
+		return fmt.Errorf("xhttp_downlink.password is required")
+	}
+	if ip := strings.TrimSpace(dl.ListenIP); ip != "" && net.ParseIP(ip) == nil {
+		return fmt.Errorf("xhttp_downlink.listen_ip is not an IP address")
 	}
 	return nil
 }

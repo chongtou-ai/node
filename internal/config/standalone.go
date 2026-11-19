@@ -49,6 +49,21 @@ type StandaloneNodeConfig struct {
 
 	Multiplex           *StandaloneMultiplexConfig `yaml:"multiplex,omitempty"`
 	AcceptProxyProtocol bool                       `yaml:"accept_proxy_protocol,omitempty"`
+
+	// XHTTPDownlink serves packet-up responses on Hysteria2.
+	XHTTPDownlink *XHTTPDownlinkConfig `yaml:"xhttp_downlink,omitempty"`
+}
+
+// XHTTPDownlinkConfig is the standalone YAML form of the panel xhttp_downlink object.
+type XHTTPDownlinkConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	ListenIP string `yaml:"listen_ip,omitempty"`
+	Port     int    `yaml:"port"`
+	Password string `yaml:"password"`
+	Server   string `yaml:"server,omitempty"`
+	SkipCert bool   `yaml:"skip_cert,omitempty"`
+	UpMbps   int    `yaml:"up_mbps,omitempty"`
+	DownMbps int    `yaml:"down_mbps,omitempty"`
 }
 
 type StandaloneRouteRule struct {

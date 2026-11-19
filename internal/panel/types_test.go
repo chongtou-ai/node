@@ -117,6 +117,42 @@ func TestNodeConfig_UnmarshalFullPanelResponse(t *testing.T) {
 	}
 }
 
+func TestNodeConfig_UnmarshalXHTTPDownlink(t *testing.T) {
+	input := `{
+		"protocol": "vless",
+		"listen_ip": "0.0.0.0",
+		"server_port": 8001,
+		"network": "xhttp",
+		"networkSettings": {"host": "example.com", "mode": "packet-up", "path": "/"},
+		"xhttp_downlink": {
+			"enabled": true,
+			"listen_ip": "0.0.0.0",
+			"port": 8443,
+			"password": "secret",
+			"server": "203.0.113.10",
+			"skip_cert": true,
+			"up_mbps": 500,
+			"down_mbps": 500
+		}
+	}`
+	var nc NodeConfig
+	if err := json.Unmarshal([]byte(input), &nc); err != nil {
+		t.Fatal(err)
+	}
+	if nc.XHTTPDownlink == nil || !nc.XHTTPDownlink.Enabled {
+		t.Fatal("xhttp_downlink was dropped")
+	}
+	if nc.XHTTPDownlink.Port != 8443 || nc.XHTTPDownlink.Password != "secret" || !nc.XHTTPDownlink.SkipCert {
+		t.Fatalf("xhttp_downlink = %+v", nc.XHTTPDownlink)
+	}
+	if nc.XHTTPDownlink.Server != "203.0.113.10" {
+		t.Fatalf("server = %q", nc.XHTTPDownlink.Server)
+	}
+	if nc.XHTTPDownlink.UpMbps != 500 || nc.XHTTPDownlink.DownMbps != 500 {
+		t.Fatalf("bandwidth = %d/%d", nc.XHTTPDownlink.UpMbps, nc.XHTTPDownlink.DownMbps)
+	}
+}
+
 func TestUsersResponse_Unmarshal(t *testing.T) {
 	input := `{
 		"users": [

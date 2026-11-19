@@ -22,6 +22,26 @@ func TestResolveKernelForProtocol(t *testing.T) {
 	}
 }
 
+func TestValidateXHTTPDownlink(t *testing.T) {
+	ok := &NodeSpec{
+		Network:         "xhttp",
+		ServerPort:      8001,
+		NetworkSettings: map[string]any{"mode": "packet-up"},
+		XHTTPDownlink:   &XHTTPDownlink{Enabled: true, ListenIP: "0.0.0.0", Port: 8443, Password: "pw"},
+	}
+	if err := ValidateXHTTPDownlink(ok, "xray"); err != nil {
+		t.Fatal(err)
+	}
+	badMode := *ok
+	badMode.NetworkSettings = map[string]any{"mode": "stream-up"}
+	if err := ValidateXHTTPDownlink(&badMode, "xray"); err == nil {
+		t.Fatal("stream-up was accepted")
+	}
+	if err := ValidateXHTTPDownlink(ok, "singbox"); err == nil {
+		t.Fatal("sing-box was accepted")
+	}
+}
+
 func TestResolveKernel(t *testing.T) {
 	if got := ResolveKernel("", "anytls", "xray"); got != "singbox" {
 		t.Fatalf("anytls+xray → %q, want singbox", got)

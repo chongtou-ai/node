@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -15,9 +16,9 @@ import (
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/uuid"
 	xrayCore "github.com/xtls/xray-core/core"
+	featurebandwidth "github.com/xtls/xray-core/features/bandwidth"
 	"github.com/xtls/xray-core/features/inbound"
 	"github.com/xtls/xray-core/features/stats"
-	featurebandwidth "github.com/xtls/xray-core/features/bandwidth"
 	"github.com/xtls/xray-core/infra/conf/serial"
 	xrayProxy "github.com/xtls/xray-core/proxy"
 	"github.com/xtls/xray-core/proxy/shadowsocks"
@@ -32,8 +33,9 @@ import (
 	"github.com/cedar2025/xboard-node/internal/config"
 	"github.com/cedar2025/xboard-node/internal/kernel"
 	"github.com/cedar2025/xboard-node/internal/kernel/geodata"
-	"github.com/cedar2025/xboard-node/internal/nlog"
 	"github.com/cedar2025/xboard-node/internal/model"
+	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/cedar2025/xboard-node/internal/xhttpdown"
 )
 
 const (
@@ -72,6 +74,10 @@ type Xray struct {
 	// running is set after a successful Start and cleared before shutdown.
 	// Atomic so IsRunning / GetConnections never block.
 	running atomic.Bool
+
+	// downlink is the Hysteria2 listener for xhttp packet-up responses.
+	// Guarded by mu. Closed outside the lock.
+	downlink io.Closer
 }
 
 func New(cfg config.KernelConfig) *Xray {
@@ -142,12 +148,19 @@ func (x *Xray) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls ker
 		inst.Close()
 		return err
 	}
+	dl, err := x.restartDownlink(nodeConfig)
+	if err != nil {
+		inst.Close()
+		return err
+	}
 
 	// ── Phase 4: Swap old → new (brief kernel lock) ─────────────────────
 	x.mu.Lock()
 	old := x.instance
 	oldLD := x.limitDispatcher
+	oldDL := x.downlink
 	x.instance = inst
+	x.downlink = dl
 	x.limitDispatcher = ld
 	x.users = users
 	x.nodeConfig = nodeConfig
@@ -161,6 +174,9 @@ func (x *Xray) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls ker
 
 	// ── Phase 5: Recycle old (background, non-blocking) ─────────────────
 	closeOld(old, oldLD)
+	if oldDL != nil {
+		_ = oldDL.Close()
+	}
 
 	x.updateDispatcherLimits(users)
 	x.updateBandwidthLimits(users)
@@ -203,14 +219,64 @@ func (x *Xray) Stop() {
 	x.mu.Lock()
 	inst := x.instance
 	ld := x.limitDispatcher
+	dl := x.downlink
 	x.instance = nil
 	x.limitDispatcher = nil
+	x.downlink = nil
 	x.mu.Unlock()
 
+	if dl != nil {
+		_ = dl.Close()
+	}
 	if ld != nil {
 		drainConns(ld, drainTimeout)
 	}
 	closeOld(inst, ld)
+}
+
+// restartDownlink closes the previous Hysteria2 listener before binding the
+// new one. UDP cannot share the port cleanly across two listeners.
+// If the new bind fails, the previous config is started again.
+func (x *Xray) restartDownlink(nc *model.NodeSpec) (io.Closer, error) {
+	if err := model.ValidateXHTTPDownlink(nc, "xray"); err != nil {
+		return nil, err
+	}
+	x.mu.Lock()
+	old := x.downlink
+	prev := x.nodeConfig
+	x.downlink = nil
+	x.mu.Unlock()
+	if old != nil {
+		_ = old.Close()
+	}
+	if nc == nil || nc.XHTTPDownlink == nil || !nc.XHTTPDownlink.Enabled {
+		return nil, nil
+	}
+	srv, err := xhttpdown.Listen(nc.XHTTPDownlink)
+	if err != nil {
+		x.restoreDownlink(prev)
+		return nil, err
+	}
+	return srv, nil
+}
+
+func (x *Xray) restoreDownlink(prev *model.NodeSpec) {
+	if prev == nil || prev.XHTTPDownlink == nil || !prev.XHTTPDownlink.Enabled {
+		return
+	}
+	restored, err := xhttpdown.Listen(prev.XHTTPDownlink)
+	if err != nil {
+		nlog.Core().Error("xhttp_downlink restore failed", "error", err)
+		return
+	}
+	x.mu.Lock()
+	if x.downlink != nil {
+		x.mu.Unlock()
+		_ = restored.Close()
+		return
+	}
+	x.downlink = restored
+	x.mu.Unlock()
 }
 
 func (x *Xray) IsRunning() bool { return x.running.Load() }
@@ -332,7 +398,7 @@ func (x *Xray) AddUsers(users []model.UserSpec) (int, error) {
 		x.users = merged
 		x.mu.Unlock()
 		x.updateDispatcherLimits(merged)
-	x.updateBandwidthLimits(merged)
+		x.updateBandwidthLimits(merged)
 		return 0, nil
 	}
 

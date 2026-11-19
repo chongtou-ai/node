@@ -86,6 +86,23 @@ func NodeSpecFromStandalone(cfg *config.Config) *NodeSpec {
 		TrafficPattern:      sc.Node.TrafficPattern,
 		Multiplex:           multiplex,
 		AcceptProxyProtocol: sc.Node.AcceptProxyProtocol,
+		XHTTPDownlink:       xhttpDownlinkFromStandalone(sc.Node.XHTTPDownlink),
+	}
+}
+
+func xhttpDownlinkFromStandalone(in *config.XHTTPDownlinkConfig) *XHTTPDownlink {
+	if in == nil {
+		return nil
+	}
+	return &XHTTPDownlink{
+		Enabled:  in.Enabled,
+		ListenIP: in.ListenIP,
+		Port:     in.Port,
+		Password: in.Password,
+		Server:   in.Server,
+		SkipCert: in.SkipCert,
+		UpMbps:   in.UpMbps,
+		DownMbps: in.DownMbps,
 	}
 }
 

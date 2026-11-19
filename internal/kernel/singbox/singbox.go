@@ -90,6 +90,9 @@ func (s *SingBox) Protocols() []string {
 }
 
 func (s *SingBox) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls kernel.TLSCert) error {
+	if nodeConfig != nil && nodeConfig.XHTTPDownlink != nil && nodeConfig.XHTTPDownlink.Enabled {
+		return fmt.Errorf("xhttp_downlink requires the xray kernel")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
