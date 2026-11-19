@@ -72,6 +72,7 @@ func (h *requestHandler) upsertSession(sessionId string) *httpSession {
 	}
 
 	h.sessions.Store(sessionId, s)
+	publishDownlink(sessionId, s, h)
 
 	shouldReap := done.New()
 	go func() {
@@ -83,6 +84,7 @@ func (h *requestHandler) upsertSession(sessionId string) *httpSession {
 		case <-shouldReap.Wait():
 			h.sessions.Delete(sessionId)
 			s.uploadQueue.Close()
+			revokeDownlink(sessionId)
 		case <-s.isFullyConnected.Wait():
 		}
 	}()
@@ -368,10 +370,19 @@ func (h *requestHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 		writer.WriteHeader(http.StatusOK)
 	} else if request.Method == "GET" || sessionId == "" { // stream-down, stream-one
 		if sessionId != "" {
+			// HTTP GET and Hysteria2 downlink share one claim. The first wins.
+			if !ClaimDownlink(sessionId) {
+				errors.LogInfo(context.Background(), "xhttp downlink already claimed: ", sessionId)
+				writer.WriteHeader(http.StatusConflict)
+				return
+			}
 			// after GET is done, the connection is finished. disable automatic
 			// session reaping, and handle it in defer
 			currentSession.isFullyConnected.Close()
-			defer h.sessions.Delete(sessionId)
+			defer func() {
+				h.sessions.Delete(sessionId)
+				revokeDownlink(sessionId)
+			}()
 		}
 
 		// magic header instructs nginx + apache to not buffer response body

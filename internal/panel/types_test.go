@@ -117,6 +117,37 @@ func TestNodeConfig_UnmarshalFullPanelResponse(t *testing.T) {
 	}
 }
 
+func TestNodeConfig_UnmarshalXHTTPDownlink(t *testing.T) {
+	input := `{
+		"protocol": "vless",
+		"listen_ip": "0.0.0.0",
+		"server_port": 8001,
+		"network": "xhttp",
+		"networkSettings": {"host": "example.com", "mode": "packet-up", "path": "/"},
+		"xhttp_downlink": {
+			"enabled": true,
+			"listen_ip": "0.0.0.0",
+			"port": 8443,
+			"password": "secret",
+			"server": "203.0.113.10",
+			"skip_cert": true
+		}
+	}`
+	var nc NodeConfig
+	if err := json.Unmarshal([]byte(input), &nc); err != nil {
+		t.Fatal(err)
+	}
+	if nc.XHTTPDownlink == nil || !nc.XHTTPDownlink.Enabled {
+		t.Fatal("xhttp_downlink was dropped")
+	}
+	if nc.XHTTPDownlink.Port != 8443 || nc.XHTTPDownlink.Password != "secret" || !nc.XHTTPDownlink.SkipCert {
+		t.Fatalf("xhttp_downlink = %+v", nc.XHTTPDownlink)
+	}
+	if nc.XHTTPDownlink.Server != "203.0.113.10" {
+		t.Fatalf("server = %q", nc.XHTTPDownlink.Server)
+	}
+}
+
 func TestUsersResponse_Unmarshal(t *testing.T) {
 	input := `{
 		"users": [

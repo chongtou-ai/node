@@ -122,6 +122,21 @@ func NodeSpecFromPanel(nc *panel.NodeConfig) *NodeSpec {
 		TrafficPattern:      nc.TrafficPattern,
 		Multiplex:           multiplex,
 		AcceptProxyProtocol: nc.AcceptProxyProtocol,
+		XHTTPDownlink:       xhttpDownlinkFromPanel(nc.XHTTPDownlink),
+	}
+}
+
+func xhttpDownlinkFromPanel(in *panel.XHTTPDownlinkConfig) *XHTTPDownlink {
+	if in == nil {
+		return nil
+	}
+	return &XHTTPDownlink{
+		Enabled:  in.Enabled,
+		ListenIP: in.ListenIP,
+		Port:     in.Port,
+		Password: in.Password,
+		Server:   in.Server,
+		SkipCert: in.SkipCert,
 	}
 }
 
@@ -268,6 +283,21 @@ func (n *NodeSpec) ToPanel() *panel.NodeConfig {
 		TrafficPattern:      n.TrafficPattern,
 		Multiplex:           multiplex,
 		AcceptProxyProtocol: n.AcceptProxyProtocol,
+		XHTTPDownlink:       xhttpDownlinkToPanel(n.XHTTPDownlink),
+	}
+}
+
+func xhttpDownlinkToPanel(in *XHTTPDownlink) *panel.XHTTPDownlinkConfig {
+	if in == nil {
+		return nil
+	}
+	return &panel.XHTTPDownlinkConfig{
+		Enabled:  in.Enabled,
+		ListenIP: in.ListenIP,
+		Port:     in.Port,
+		Password: in.Password,
+		Server:   in.Server,
+		SkipCert: in.SkipCert,
 	}
 }
 

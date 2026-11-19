@@ -71,8 +71,8 @@ type MachineNode struct {
 
 // MachineNodesResponse is the response from GET /api/v2/server/machine/nodes.
 type MachineNodesResponse struct {
-	Nodes      []MachineNode      `json:"nodes"`
-	BaseConfig MachineBaseConfig  `json:"base_config"`
+	Nodes      []MachineNode     `json:"nodes"`
+	BaseConfig MachineBaseConfig `json:"base_config"`
 }
 
 // MachineBaseConfig holds polling intervals for machine mode.
@@ -144,6 +144,20 @@ type NodeConfig struct {
 
 	// Proxy Protocol (supports both top-level and networkSettings for compatibility)
 	AcceptProxyProtocol bool `json:"accept_proxy_protocol,omitempty"`
+
+	// XHTTPDownlink carries packet-up responses over Hysteria2.
+	// The app dials Server:Port with Password. This node binds ListenIP:Port.
+	XHTTPDownlink *XHTTPDownlinkConfig `json:"xhttp_downlink,omitempty"`
+}
+
+// XHTTPDownlinkConfig is the panel JSON object xhttp_downlink.
+type XHTTPDownlinkConfig struct {
+	Enabled  bool   `json:"enabled"`
+	ListenIP string `json:"listen_ip,omitempty"`
+	Port     int    `json:"port"`
+	Password string `json:"password"`
+	Server   string `json:"server,omitempty"`
+	SkipCert bool   `json:"skip_cert,omitempty"`
 }
 
 // GetProxyProtocol returns true if AcceptProxyProtocol is set either at node level

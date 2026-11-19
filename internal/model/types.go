@@ -45,6 +45,23 @@ type NodeSpec struct {
 
 	Multiplex           *MultiplexConfig
 	AcceptProxyProtocol bool
+
+	// XHTTPDownlink is the Hysteria2 listener that carries packet-up responses.
+	// Nil or Enabled false keeps the legacy HTTP GET downlink.
+	XHTTPDownlink *XHTTPDownlink `json:"xhttp_downlink,omitempty"`
+}
+
+// XHTTPDownlink is the panel field xhttp_downlink.
+// ListenIP and Port are where this node binds. Server is the address the
+// app dials and is not used to bind. SkipCert tells the app to skip the
+// QUIC certificate check; the node always presents its own certificate.
+type XHTTPDownlink struct {
+	Enabled  bool
+	ListenIP string
+	Port     int
+	Password string
+	Server   string
+	SkipCert bool
 }
 
 type OutboundConfig struct {

@@ -320,6 +320,42 @@ cert:
 	}
 }
 
+func TestLoad_StandaloneXHTTPDownlink(t *testing.T) {
+	path := writeTemp(t, `
+standalone:
+  enabled: true
+  node:
+    protocol: "vless"
+    server_port: 8001
+    network: "xhttp"
+    network_settings:
+      path: "/"
+      mode: "packet-up"
+    xhttp_downlink:
+      enabled: true
+      listen_ip: "0.0.0.0"
+      port: 8443
+      password: "secret"
+      server: "203.0.113.10"
+      skip_cert: true
+  users:
+    - id: 1
+      uuid: "11111111-1111-1111-1111-111111111111"
+kernel:
+  type: xray
+cert:
+  cert_mode: none
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	dl := cfg.Standalone.Node.XHTTPDownlink
+	if dl == nil || !dl.Enabled || dl.Port != 8443 || dl.Password != "secret" || !dl.SkipCert {
+		t.Fatalf("xhttp_downlink = %+v", dl)
+	}
+}
+
 func TestLoad_StandaloneRequiresUsers(t *testing.T) {
 	path := writeTemp(t, `
 standalone:
@@ -335,7 +371,6 @@ kernel:
 		t.Fatal("expected error for standalone mode without users")
 	}
 }
-
 
 func TestLoadRoot_LegacyConfigNormalizesToSingleInstance(t *testing.T) {
 	path := writeTemp(t, `
