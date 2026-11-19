@@ -101,6 +101,8 @@ func xhttpDownlinkFromStandalone(in *config.XHTTPDownlinkConfig) *XHTTPDownlink 
 		Password: in.Password,
 		Server:   in.Server,
 		SkipCert: in.SkipCert,
+		UpMbps:   in.UpMbps,
+		DownMbps: in.DownMbps,
 	}
 }
 

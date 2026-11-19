@@ -62,6 +62,10 @@ type XHTTPDownlink struct {
 	Password string
 	Server   string
 	SkipCert bool
+	// UpMbps caps how fast the server accepts client upload. DownMbps caps the
+	// downlink toward the client. Zero means no server cap; the client's up/down wins.
+	UpMbps   int
+	DownMbps int
 }
 
 type OutboundConfig struct {

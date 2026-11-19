@@ -62,6 +62,8 @@ type XHTTPDownlinkConfig struct {
 	Password string `yaml:"password"`
 	Server   string `yaml:"server,omitempty"`
 	SkipCert bool   `yaml:"skip_cert,omitempty"`
+	UpMbps   int    `yaml:"up_mbps,omitempty"`
+	DownMbps int    `yaml:"down_mbps,omitempty"`
 }
 
 type StandaloneRouteRule struct {

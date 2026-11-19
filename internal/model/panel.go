@@ -137,6 +137,8 @@ func xhttpDownlinkFromPanel(in *panel.XHTTPDownlinkConfig) *XHTTPDownlink {
 		Password: in.Password,
 		Server:   in.Server,
 		SkipCert: in.SkipCert,
+		UpMbps:   in.UpMbps,
+		DownMbps: in.DownMbps,
 	}
 }
 
@@ -298,6 +300,8 @@ func xhttpDownlinkToPanel(in *XHTTPDownlink) *panel.XHTTPDownlinkConfig {
 		Password: in.Password,
 		Server:   in.Server,
 		SkipCert: in.SkipCert,
+		UpMbps:   in.UpMbps,
+		DownMbps: in.DownMbps,
 	}
 }
 

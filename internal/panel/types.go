@@ -158,6 +158,8 @@ type XHTTPDownlinkConfig struct {
 	Password string `json:"password"`
 	Server   string `json:"server,omitempty"`
 	SkipCert bool   `json:"skip_cert,omitempty"`
+	UpMbps   int    `json:"up_mbps,omitempty"`
+	DownMbps int    `json:"down_mbps,omitempty"`
 }
 
 // GetProxyProtocol returns true if AcceptProxyProtocol is set either at node level

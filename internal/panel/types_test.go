@@ -130,7 +130,9 @@ func TestNodeConfig_UnmarshalXHTTPDownlink(t *testing.T) {
 			"port": 8443,
 			"password": "secret",
 			"server": "203.0.113.10",
-			"skip_cert": true
+			"skip_cert": true,
+			"up_mbps": 500,
+			"down_mbps": 500
 		}
 	}`
 	var nc NodeConfig
@@ -145,6 +147,9 @@ func TestNodeConfig_UnmarshalXHTTPDownlink(t *testing.T) {
 	}
 	if nc.XHTTPDownlink.Server != "203.0.113.10" {
 		t.Fatalf("server = %q", nc.XHTTPDownlink.Server)
+	}
+	if nc.XHTTPDownlink.UpMbps != 500 || nc.XHTTPDownlink.DownMbps != 500 {
+		t.Fatalf("bandwidth = %d/%d", nc.XHTTPDownlink.UpMbps, nc.XHTTPDownlink.DownMbps)
 	}
 }
 

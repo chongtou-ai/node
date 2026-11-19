@@ -71,7 +71,9 @@ func Listen(cfg *model.XHTTPDownlink) (*Server, error) {
 		Context:               ctx,
 		Logger:                nlogAdapter{},
 		TLSConfig:             tlsConfig,
-		IgnoreClientBandwidth: true,
+		SendBPS:               mbpsToBps(cfg.DownMbps),
+		ReceiveBPS:            mbpsToBps(cfg.UpMbps),
+		IgnoreClientBandwidth: false,
 		UDPDisabled:           true,
 		Handler:               &downlinkHandler{ctx: ctx},
 		MasqueradeHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +159,13 @@ func (nlogAdapter) Panic(args ...any) {
 }
 
 var _ logger.Logger = nlogAdapter{}
+
+func mbpsToBps(mbps int) uint64 {
+	if mbps <= 0 {
+		return 0
+	}
+	return uint64(mbps) * 1000 * 1000 / 8
+}
 
 func selfSigned() (tls.Certificate, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
