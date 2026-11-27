@@ -367,7 +367,8 @@ func (h *requestHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 			writer.Header().Set("Cache-Control", "no-store")
 		}
 
-		writer.WriteHeader(http.StatusOK)
+		// Camouflage as a normal panel/API JSON ack (clients discard the body).
+		writePacketUpSuccessResponse(writer)
 	} else if request.Method == "GET" || sessionId == "" { // stream-down, stream-one
 		if sessionId != "" {
 			// HTTP GET and Hysteria2 downlink share one claim. The first wins.
